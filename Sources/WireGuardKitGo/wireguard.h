@@ -19,5 +19,6 @@ extern char *wgGetConfig(int handle);
 extern void wgBumpSockets(int handle);
 extern void wgDisableSomeRoamingForBrokenMobileSemantics(int handle);
 extern const char *wgVersion();
+extern void wgSetProfilerPath(const char *profilerPath);
 
 #endif

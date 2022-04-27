@@ -20,6 +20,7 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/debug"
+	"runtime/pprof"
 	"strings"
 	"time"
 	"unsafe"
@@ -32,6 +33,7 @@ import (
 
 var loggerFunc unsafe.Pointer
 var loggerCtx unsafe.Pointer
+var profileFilePath string
 
 type CLogger int
 
@@ -80,6 +82,11 @@ func init() {
 func wgSetLogger(context, loggerFn uintptr) {
 	loggerCtx = unsafe.Pointer(context)
 	loggerFunc = unsafe.Pointer(loggerFn)
+}
+
+//export wgSetProfilerPath
+func wgSetProfilerPath(path *C.char) {
+	profileFilePath = C.GoString(path)
 }
 
 //export wgTurnOn
@@ -135,6 +142,22 @@ func wgTurnOn(settings *C.char, tunFd int32) int32 {
 
 //export wgTurnOff
 func wgTurnOff(tunnelHandle int32) {
+	logger := &device.Logger{
+		Verbosef: CLogger(0).Printf,
+		Errorf:   CLogger(1).Printf,
+	}
+
+	f, err := os.Create(profileFilePath)
+	if err != nil {
+		logger.Errorf("could not create memory profile file: %v", err)
+	}
+	defer f.Close()
+
+	runtime.GC() // get up-to-date statistics
+        if err := pprof.WriteHeapProfile(f); err != nil {
+            logger.Errorf("could not write memory profile: %v", err)
+        }
+
 	dev, ok := tunnelHandles[tunnelHandle]
 	if !ok {
 		return

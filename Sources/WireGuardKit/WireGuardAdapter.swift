@@ -129,10 +129,11 @@ public class WireGuardAdapter {
     /// - Parameter packetTunnelProvider: an instance of `NEPacketTunnelProvider`. Internally stored
     ///   as a weak reference.
     /// - Parameter logHandler: a log handler closure.
-    public init(with packetTunnelProvider: NEPacketTunnelProvider, logHandler: @escaping LogHandler) {
+    public init(profileFilePathString: String, with packetTunnelProvider: NEPacketTunnelProvider, logHandler: @escaping LogHandler) {
         self.packetTunnelProvider = packetTunnelProvider
         self.logHandler = logHandler
 
+        wgSetProfilerPath((profileFilePathString as NSString).utf8String)
         setupLogHandler()
     }
 
