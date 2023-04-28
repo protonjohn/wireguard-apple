@@ -41,11 +41,11 @@ private enum State {
 public class WireGuardAdapter {
     public typealias LogHandler = (WireGuardLogLevel, String) -> Void
 
-    /// Network routes monitor.
-    private var networkMonitor: NWPathMonitor?
-
     /// Packet tunnel provider.
-    private weak var packetTunnelProvider: NEPacketTunnelProvider?
+    @objc private weak var packetTunnelProvider: NEPacketTunnelProvider?
+
+    /// Used for observing changes in the network path.
+    private var pathUpdateObservation: NSKeyValueObservation!
 
     /// Log handler closure.
     private let logHandler: LogHandler
@@ -181,11 +181,14 @@ public class WireGuardAdapter {
                 return
             }
 
-            let networkMonitor = NWPathMonitor()
-            networkMonitor.pathUpdateHandler = { [weak self] path in
-                self?.didReceivePathUpdate(path: path)
+            pathUpdateObservation = observe(\.packetTunnelProvider.defaultPath, options: [.old, .new]) { [weak self] _, change in
+                guard let new = change.newValue,
+                      change.oldValue == nil ||
+                      !new.isEqual(to: change.oldValue!) else {
+                    return
+                }
+                self?.didReceivePathUpdate(path: new)
             }
-            networkMonitor.start(queue: self.workQueue)
 
             do {
                 let settingsGenerator = try self.makeSettingsGenerator(with: tunnelConfiguration)
@@ -413,8 +416,8 @@ public class WireGuardAdapter {
 
     /// Helper method used by network path monitor.
     /// - Parameter path: new network path
-    private func didReceivePathUpdate(path: Network.NWPath) {
-        self.logHandler(.verbose, "Network change detected with \(path.status) route and interface order \(path.availableInterfaces)")
+    private func didReceivePathUpdate(path: NetworkExtension.NWPath) {
+        self.logHandler(.verbose, "Network change detected with \(path.status). isExpensive: \(path.isExpensive) isConstrained: \(path.isConstrained)")
 
         #if os(macOS)
         if case .started(let handle, _) = self.state {
@@ -472,11 +475,11 @@ public enum WireGuardLogLevel: Int32 {
     case error = 1
 }
 
-private extension Network.NWPath.Status {
+private extension NetworkExtension.NWPath.Status {
     /// Returns `true` if the path is potentially satisfiable.
     var isSatisfiable: Bool {
         switch self {
-        case .requiresConnection, .satisfied:
+        case .satisfiable, .satisfied:
             return true
         case .unsatisfied:
             return false
